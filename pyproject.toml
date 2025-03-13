@@ -1,0 +1,15 @@
+[project]
+name = "gemini_pro"
+description = "This is a Google Gemini Pro API integration node for ComfyUI, supporting text, image, video, and audio inputs."
+version = "1.0.0"
+license = {file = "LICENSE"}
+dependencies = ["google-generativeai>=0.3.0", "Pillow>=10.0.0", "numpy>=1.24.0", "torch>=2.0.0"]
+
+[project.urls]
+Repository = "https://github.com/penposs/ComfyUI_Gemini_Pro"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "ComfyUI_Gemini_Pro"
+Icon = ""
