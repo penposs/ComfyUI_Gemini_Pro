@@ -56,7 +56,7 @@ MIT License
 
 创建 `LICENSE` 文件：
 
-```plaintext:i%3A%5CComfyUI_windows_portable%5CComfyUI%5Ccustom_nodes%5CComfyUI_Gemini_Pro%5CLICENSE
+
 MIT License
 
 Copyright (c) 2024 Your Name
