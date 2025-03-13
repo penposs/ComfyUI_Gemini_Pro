@@ -54,7 +54,7 @@ pip install google-generativeai pillow numpy torch
 ## 许可证
 MIT License
 
-创建 `LICENSE` 文件：
+
 
 
 MIT License
