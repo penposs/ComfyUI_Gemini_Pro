@@ -9,7 +9,7 @@ import requests
 import tempfile
 from io import BytesIO
 from google import genai
-from google.genai import types
+import google.generativeai as genai
 import time
 import traceback
 
