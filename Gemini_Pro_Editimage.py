@@ -8,7 +8,8 @@ from PIL import Image
 import requests
 import tempfile
 from io import BytesIO
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import time
 import traceback
 
