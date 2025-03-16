@@ -306,3 +306,236 @@ class GeminiProNode:
         except Exception as e:
             print(f"[Gemini Pro] 错误: {str(e)}")
             return (f"错误: {str(e)}",)
+
+class GeminiFileUpload:
+    def __init__(self):
+        self.api_key = None
+        self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+        self.temp_dir = os.path.join("I:", "ComfyUI_windows_portable", "ComfyUI", "temp")
+        self.load_config()
+        
+        # 确保临时目录存在
+        if not os.path.exists(self.temp_dir):
+            try:
+                os.makedirs(self.temp_dir)
+                print(f"[Gemini文件上传] 创建临时目录: {self.temp_dir}")
+            except Exception as e:
+                print(f"[Gemini文件上传] 创建临时目录失败: {str(e)}")
+        
+    def load_config(self):
+        """加载配置文件"""
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.api_key = config.get('api_key', '')
+                    if self.api_key:
+                        genai.configure(api_key=self.api_key)
+                        print("[Gemini文件上传] 成功加载配置文件中的 API Key")
+                    else:
+                        print("[Gemini文件上传] 警告: 配置文件中没有找到有效的 API Key")
+            else:
+                print(f"[Gemini文件上传] 警告: 配置文件不存在 - {self.config_path}")
+        except Exception as e:
+            print(f"[Gemini文件上传] 加载配置文件失败: {str(e)}")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "file_path": ("STRING", {"default": "./sample.mp3", "multiline": False}),
+            }
+        }
+
+    RETURN_TYPES = ("GEMINI_FILE",)
+    RETURN_NAMES = ("file",)
+    FUNCTION = "file_upload"
+
+    CATEGORY = "Gemini Pro"
+
+    def file_upload(self, file_path):
+        try:
+            if not self.api_key:
+                return ("错误: 未在配置文件中找到有效的 API Key，请先在 config.json 中配置",)
+                
+            print(f"[Gemini文件上传] 正在处理文件: {file_path}")
+            
+            # 检查原始文件是否存在
+            if not os.path.exists(file_path):
+                print(f"[Gemini文件上传] 错误: 文件不存在 - {file_path}")
+                return ("错误: 文件不存在",)
+            
+            # 生成随机文件名
+            original_filename = os.path.basename(file_path)
+            file_ext = os.path.splitext(original_filename)[1]
+            random_filename = f"{int(time.time())}_{random.randint(1000, 9999)}{file_ext}"
+            temp_file_path = os.path.join(self.temp_dir, random_filename)
+            
+            print(f"[Gemini文件上传] 创建临时文件: {temp_file_path}")
+            
+            # 复制文件到临时目录
+            try:
+                import shutil
+                shutil.copy2(file_path, temp_file_path)
+            except Exception as e:
+                print(f"[Gemini文件上传] 复制文件到临时目录失败: {str(e)}")
+                return (f"错误: 复制文件失败 - {str(e)}",)
+            
+            # 上传临时文件
+            try:
+                print(f"[Gemini文件上传] 上传临时文件: {temp_file_path}")
+                uploaded_file = genai.upload_file(temp_file_path)
+                print(f"[Gemini文件上传] 文件上传成功，ID: {uploaded_file.id if hasattr(uploaded_file, 'id') else '未知'}")
+                
+                # 保存原始文件路径信息（可选，如果后续需要）
+                uploaded_file.original_filepath = file_path
+                
+                # 删除临时文件
+                try:
+                    os.remove(temp_file_path)
+                    print(f"[Gemini文件上传] 临时文件已删除: {temp_file_path}")
+                except Exception as e:
+                    print(f"[Gemini文件上传] 警告: 删除临时文件失败 - {str(e)}")
+                
+                return (uploaded_file,)
+            except Exception as e:
+                # 上传失败，也尝试删除临时文件
+                try:
+                    if os.path.exists(temp_file_path):
+                        os.remove(temp_file_path)
+                        print(f"[Gemini文件上传] 上传失败，临时文件已删除: {temp_file_path}")
+                except:
+                    pass
+                
+                print(f"[Gemini文件上传] 错误: 上传文件失败 - {str(e)}")
+                return (f"错误: 上传文件失败 - {str(e)}",)
+            
+        except Exception as e:
+            print(f"[Gemini文件上传] 错误: {str(e)}")
+            return (f"错误: {str(e)}",)
+
+
+class GeminiFileProcessing:
+    def __init__(self):
+        self.api_key = None
+        self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+        self.load_config()
+        
+    def load_config(self):
+        """加载配置文件"""
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.api_key = config.get('api_key', '')
+                    if self.api_key:
+                        genai.configure(api_key=self.api_key)
+                        print("[Gemini文件处理] 成功加载配置文件中的 API Key")
+                    else:
+                        print("[Gemini文件处理] 警告: 配置文件中没有找到有效的 API Key")
+            else:
+                print(f"[Gemini文件处理] 警告: 配置文件不存在 - {self.config_path}")
+        except Exception as e:
+            print(f"[Gemini文件处理] 加载配置文件失败: {str(e)}")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "file": ("GEMINI_FILE",),
+                "prompt": ("STRING", {"default": "分析这个文件内容并提供摘要。", "multiline": True}),
+                "user_prompt": ("STRING", {"default": "你是一个专业的文件分析助手，请以专业、清晰的方式分析文件内容。", "multiline": True}),
+                "model": (["gemini-1.5-pro", "gemini-2.0-pro-exp", "gemini-2.0-flash-exp"], {"default": "gemini-1.5-pro"}),
+                "stream": ("BOOLEAN", {"default": False}),
+                "max_output_tokens": ("INT", {"default": 8192, "min": 1, "max": 8192}),
+                "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("response",)
+    FUNCTION = "generate_content"
+    OUTPUT_NODE = True
+    CATEGORY = "Gemini Pro"
+
+    def generate_content(self, file, prompt, user_prompt, model, stream, max_output_tokens=8192, temperature=0.4):
+        try:
+            if not self.api_key:
+                return ("错误: 未在配置文件中找到有效的 API Key，请先在 config.json 中配置",)
+                
+            print(f"[Gemini文件处理] 正在处理文件")
+            print(f"[Gemini文件处理] 系统提示词: {user_prompt}")
+            print(f"[Gemini文件处理] 提示词: {prompt}")
+            print(f"[Gemini文件处理] 模型: {model}")
+                
+            # 创建模型实例
+            model_instance = genai.GenerativeModel(model)
+            
+            # 添加基础延迟和重试逻辑
+            base_delay = 3  # 基础延迟3秒
+            max_retries = 5  # 最大重试次数5次
+            
+            # 调用API前的延迟
+            time.sleep(base_delay)
+            
+            # 合并用户提示词和提示词
+            combined_prompt = f"System: {user_prompt}\nUser: {prompt}"
+            
+            # 发送请求并处理流式/非流式响应
+            for attempt in range(max_retries):
+                try:
+                    if attempt > 0:
+                        delay = base_delay * (2 ** attempt)  # 指数退避
+                        print(f"[Gemini文件处理] 配额限制，等待 {delay} 秒后重试...")
+                        time.sleep(delay)
+                    
+                    start_time = time.time()
+                    
+                    if stream:
+                        print("[Gemini文件处理] 使用流式输出模式")
+                        response = model_instance.generate_content(
+                            [combined_prompt, file], 
+                            stream=True,
+                            generation_config=genai.types.GenerationConfig(
+                                temperature=temperature,
+                                max_output_tokens=max_output_tokens
+                            )
+                        )
+                        textoutput = "\n".join([chunk.text for chunk in response])
+                    else:
+                        print("[Gemini文件处理] 使用标准输出模式")
+                        response = model_instance.generate_content(
+                            [combined_prompt, file],
+                            generation_config=genai.types.GenerationConfig(
+                                temperature=temperature,
+                                max_output_tokens=max_output_tokens
+                            )
+                        )
+                        textoutput = response.text
+                    
+                    end_time = time.time()
+                    print(f"[Gemini文件处理] API 调用耗时: {end_time - start_time:.2f} 秒")
+                    print(f"[Gemini文件处理] 生成完成，长度: {len(textoutput)} 字符")
+                    
+                    return (textoutput,)
+                except Exception as e:
+                    if "ResourceExhausted" in str(e) and attempt < max_retries - 1:
+                        print(f"[Gemini文件处理] 资源不足，正在重试 ({attempt + 1}/{max_retries})")
+                        continue
+                    elif attempt < max_retries - 1:
+                        print(f"[Gemini文件处理] 错误: {str(e)}, 正在重试 ({attempt + 1}/{max_retries})")
+                        continue
+                    raise  # 其他错误或已达到最大重试次数，抛出异常
+            
+            # 如果所有重试都失败
+            return ("错误: API调用失败，已重试最大次数",)
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[Gemini文件处理] 错误: {error_msg}")
+            
+            # 如果出现文件状态错误，给用户更清晰的提示
+            if "not in an ACTIVE state" in error_msg:
+                return ("错误: 文件状态无效。这可能是由于文件已被使用过，请重新上传文件。",)
+            
+            return (f"错误: {error_msg}",)
