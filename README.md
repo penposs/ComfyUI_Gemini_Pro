@@ -32,7 +32,11 @@ git clone https://github.com/penposs/ComfyUI_Gemini_Pro.git
 
 3. 安装依赖：
 ```bash
-pip install google-generativeai
+# 先卸载现有的可能冲突的库
+pip uninstall -y google-api-python-client google-generativeai 
+
+# 安装最新版本
+pip install google-generativeai --upgrade
 ```
 
 ## 使用方法
