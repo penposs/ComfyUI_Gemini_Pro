@@ -8,6 +8,7 @@ import torch
 import base64
 import json
 from io import BytesIO
+import tempfile
 
 class GeminiProNode:
     def __init__(self):
@@ -53,9 +54,9 @@ class GeminiProNode:
             },
             "optional": {
                 "image": ("IMAGE",),
-                "video": ("IMAGE",),
+                "video": ("VIDEO",),
                 "audio": ("AUDIO",),
-                "max_output_tokens": ("INT", {"default": 1000, "min": 1, "max": 5124}),
+                "max_output_tokens": ("INT", {"default": 1000, "min": 1, "max": 8192}),
                 "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
             }
         }
@@ -154,64 +155,23 @@ class GeminiProNode:
                     return (f"错误: 图片处理失败 - {str(e)}",)
             elif input_type == "video" and video is not None:
                 try:
-                    # 处理视频帧
-                    if isinstance(video, torch.Tensor):
-                        if len(video.shape) == 4 and video.shape[0] > 1:  # 多帧视频
-                            frame_count = video.shape[0]
-                            step = max(1, frame_count // 10)  # 最多采样10帧
-                            frames = []
-                            for i in range(0, frame_count, step):
-                                frame = video[i]
-                                # 转换单帧为PIL图像
-                                if frame.shape[0] == 3:
-                                    frame = frame.permute(1, 2, 0)
-                                frame = (frame * 255).round().clamp(0, 255).cpu().numpy().astype(np.uint8)
-                                pil_frame = PIL.Image.fromarray(frame)
-                                # 调整帧大小到256x256
-                                width, height = pil_frame.size
-                                if width > height:
-                                    if width > 256:
-                                        height = int(256 * height / width)
-                                        width = 256
-                                else:
-                                    if height > 256:
-                                        width = int(256 * width / height)
-                                        height = 256
-                                pil_frame = pil_frame.resize((width, height), PIL.Image.LANCZOS)
-                                frames.append(pil_frame)
-                            
-                            # 更新提示词和内容
-                            content = [f"这是一个包含 {frame_count} 帧的视频。分析视频内容，注意帧之间的任何变化或动作："]
-                            content.extend(frames)
-                            if prompt:
-                                content.append(prompt)
-                        else:  # 单帧视频
-                            frame = video.squeeze(0) if len(video.shape) == 4 else video
-                            if frame.shape[0] == 3:
-                                frame = frame.permute(1, 2, 0)
-                            frame = (frame * 255).round().clamp(0, 255).cpu().numpy().astype(np.uint8)
-                            pil_frame = PIL.Image.fromarray(frame)
-                            
-                            # 调整大小到最大1024像素
-                            width, height = pil_frame.size
-                            if width > height:
-                                if width > 1024:
-                                    height = int(1024 * height / width)
-                                    width = 1024
-                            else:
-                                if height > 1024:
-                                    width = int(1024 * width / height)
-                                    height = 1024
-                            pil_frame = pil_frame.resize((width, height), PIL.Image.LANCZOS)
-                            
-                            content = ["这是视频中的单个帧。分析图像内容：", pil_frame]
-                            if prompt:
-                                content.append(prompt)
+                    # 处理视频文件
+                    if isinstance(video, str):  # 视频文件路径
+                        # 使用GeminiFileUpload类上传视频文件
+                        file_upload = GeminiFileUpload()
+                        uploaded_file = file_upload.file_upload(video)
                         
-                        print(f"[Gemini Pro] 视频处理成功: {len(content)-1} 帧")
+                        if isinstance(uploaded_file, tuple) and uploaded_file[0].startswith("错误"):
+                            return uploaded_file
+                            
+                        # 构建视频分析提示
+                        video_prompt = f"这是一个视频文件。请分析视频内容，注意视频中的动作、场景变化和关键事件：\n{prompt}"
+                        content = [video_prompt, uploaded_file[0]]
+                        
                     else:
-                        raise ValueError("视频必须是tensor格式")
+                        return ("错误: 视频输入必须是文件路径",)
                         
+                    print(f"[Gemini Pro] 视频处理成功")
                 except Exception as e:
                     print(f"[Gemini Pro] 视频处理错误: {str(e)}")
                     return (f"错误: 视频处理失败 - {str(e)}",)
@@ -311,16 +271,18 @@ class GeminiFileUpload:
     def __init__(self):
         self.api_key = None
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
-        self.temp_dir = os.path.join("I:", "ComfyUI_windows_portable", "ComfyUI", "temp")
+        # 在插件根目录下创建临时文件夹
+        self.temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
         self.load_config()
         
         # 确保临时目录存在
         if not os.path.exists(self.temp_dir):
             try:
-                os.makedirs(self.temp_dir)
+                os.makedirs(self.temp_dir, exist_ok=True)
                 print(f"[Gemini文件上传] 创建临时目录: {self.temp_dir}")
             except Exception as e:
                 print(f"[Gemini文件上传] 创建临时目录失败: {str(e)}")
+                return ("错误: 无法创建临时目录",)
         
     def load_config(self):
         """加载配置文件"""
