@@ -8,6 +8,7 @@ import torch
 import base64
 import json
 from io import BytesIO
+import tempfile
 
 class GeminiProNode:
     def __init__(self):
@@ -55,7 +56,7 @@ class GeminiProNode:
                 "image": ("IMAGE",),
                 "video": ("IMAGE",),
                 "audio": ("AUDIO",),
-                "max_output_tokens": ("INT", {"default": 1000, "min": 1, "max": 5124}),
+                "max_output_tokens": ("INT", {"default": 1000, "min": 1, "max": 8192}),
                 "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
             }
         }
@@ -311,7 +312,38 @@ class GeminiFileUpload:
     def __init__(self):
         self.api_key = None
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
-        self.temp_dir = os.path.join("I:", "ComfyUI_windows_portable", "ComfyUI", "temp")
+        
+        # 自动检测ComfyUI根目录并设置临时目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # 从当前目录向上查找，直到找到ComfyUI根目录
+        comfy_root = None
+        check_dir = current_dir
+        while True:
+            # 如果当前目录名为ComfyUI，则找到根目录
+            if os.path.basename(check_dir) == "ComfyUI":
+                comfy_root = check_dir
+                break
+            # 或者如果当前目录下有特定的ComfyUI特征文件/目录
+            elif os.path.exists(os.path.join(check_dir, "main.py")) and os.path.exists(os.path.join(check_dir, "nodes")):
+                comfy_root = check_dir
+                break
+            
+            # 获取父目录
+            parent_dir = os.path.dirname(check_dir)
+            # 如果已经到达根目录，则退出循环
+            if parent_dir == check_dir:
+                break
+            check_dir = parent_dir
+        
+        # 如果找到ComfyUI根目录，则设置temp目录
+        if comfy_root:
+            self.temp_dir = os.path.join(comfy_root, "temp")
+            print(f"[Gemini文件上传] 自动检测到ComfyUI根目录: {comfy_root}")
+        else:
+            # 如果未找到，则使用系统临时目录
+            self.temp_dir = os.path.join(tempfile.gettempdir(), "comfyui_gemini_temp")
+            print(f"[Gemini文件上传] 无法检测到ComfyUI根目录，使用系统临时目录: {self.temp_dir}")
+        
         self.load_config()
         
         # 确保临时目录存在
