@@ -84,11 +84,25 @@ class GeminiProNode:
             elif not self.api_key:  # 如果没有输入且没有保存的 API Key
                 return ("错误: 请先输入 API Key",)
             
-            # 设置代理
-            if proxy:
+            # 处理代理设置 - 改为智能自适应
+            if proxy and proxy.strip():
+                # 格式化代理地址，确保包含协议前缀
+                proxy = proxy.strip()
+                if not (proxy.startswith('http://') or proxy.startswith('https://')):
+                    proxy = f"http://{proxy}"
+                    print(f"[Gemini Pro] 已自动添加http://前缀到代理地址")
+                
+                # 设置环境变量
                 os.environ['http_proxy'] = proxy
                 os.environ['https_proxy'] = proxy
                 print(f"[Gemini Pro] 使用代理: {proxy}")
+            else:
+                # 如果未提供代理，确保清除之前可能设置的环境变量
+                if 'http_proxy' in os.environ:
+                    del os.environ['http_proxy']
+                if 'https_proxy' in os.environ:
+                    del os.environ['https_proxy']
+                print("[Gemini Pro] 不使用代理")
 
             print(f"\n[Gemini Pro] 正在调用 API...")
             print(f"[Gemini Pro] 模型: {model}")
@@ -229,6 +243,7 @@ class GeminiProNode:
             if system_prompt:
                 print(f"[Gemini Pro] 使用系统提示词: {system_prompt}")
                 content.insert(0, f"System: {system_prompt}\nUser: ")
+            
             # 添加基础延迟和重试逻辑
             base_delay = 3  # 增加基础延迟到 3 秒
             max_retries = 5  # 增加最大重试次数到 5 次
@@ -236,73 +251,100 @@ class GeminiProNode:
             # 每次 API 调用前添加基础延迟
             time.sleep(base_delay)
             
-            for attempt in range(max_retries):
-                try:
-                    if attempt > 0:
-                        delay = base_delay * (2 ** attempt)  # 增加退避时间
-                        print(f"[Gemini Pro] 配额限制，等待 {delay} 秒后重试...")
-                        time.sleep(delay)
-                    
-                    response = model_instance.generate_content(
-                        content,
-                        generation_config=genai.types.GenerationConfig(
-                            temperature=temperature,
-                            max_output_tokens=max_output_tokens,
-                            candidate_count=1
+            response = None
+            try:
+                for attempt in range(max_retries):
+                    try:
+                        if attempt > 0:
+                            delay = base_delay * (2 ** attempt)  # 增加退避时间
+                            print(f"[Gemini Pro] 配额限制，等待 {delay} 秒后重试...")
+                            time.sleep(delay)
+                        
+                        response = model_instance.generate_content(
+                            content,
+                            generation_config=genai.types.GenerationConfig(
+                                temperature=temperature,
+                                max_output_tokens=max_output_tokens,
+                                candidate_count=1
+                            )
                         )
-                    )
-                    break  # 如果成功，跳出重试循环
-                except Exception as e:
-                    if ("429" in str(e) or "Resource has been exhausted" in str(e)) and attempt < max_retries - 1:
-                        print(f"[Gemini Pro] 配额限制，正在重试 ({attempt + 1}/{max_retries})")
-                        continue
-                    raise  # 如果是其他错误或已达到最大重试次数，则抛出异常
-            max_retries = 3
-            base_delay = 2  # 基础延迟时间（秒）
-            # 修改重试逻辑，添加总体超时控制
-            max_retries = 3
-            base_delay = 2
-            start_time = time.time()
-            timeout = 30  # 设置30秒超时
-            for attempt in range(max_retries):
-                try:
-                    current_time = time.time()
-                    if current_time - start_time > timeout:
-                        raise TimeoutError("API 调用超时（超过30秒）")
-                    if attempt > 0:
-                        delay = min(base_delay * (2 ** (attempt - 1)), timeout - (current_time - start_time))
-                        if delay <= 0:
-                            raise TimeoutError("API 调用超时（超过30秒）")
-                        print(f"[Gemini Pro] 等待 {delay:.1f} 秒后重试...")
-                        time.sleep(delay)
-                    
-                    response = model_instance.generate_content(
-                        content,
-                        generation_config=genai.types.GenerationConfig(
-                            temperature=temperature,
-                            max_output_tokens=max_output_tokens,
-                            candidate_count=1
-                        )
-                    )
-                    break  # 如果成功，跳出重试循环
-                except TimeoutError as te:
-                    print(f"[Gemini Pro] {str(te)}")
-                    return (f"错误: {str(te)}",)
-                except Exception as e:
-                    if "ResourceExhausted" in str(e) and attempt < max_retries - 1:
-                        print(f"[Gemini Pro] 资源不足，正在重试 ({attempt + 1}/{max_retries})")
-                        continue
-                    raise  # 如果是其他错误或已达到最大重试次数，则抛出异常
+                        break  # 如果成功，跳出重试循环
+                    except Exception as e:
+                        if ("429" in str(e) or "Resource has been exhausted" in str(e)) and attempt < max_retries - 1:
+                            print(f"[Gemini Pro] 配额限制，正在重试 ({attempt + 1}/{max_retries})")
+                            continue
+                        raise  # 如果是其他错误或已达到最大重试次数，则抛出异常
 
-            end_time = time.time()
-            print(f"[Gemini Pro] API 调用耗时: {end_time - start_time:.2f} 秒")
+                # 修改重试逻辑，添加总体超时控制
+                max_retries = 3
+                base_delay = 2
+                start_time = time.time()
+                timeout = 30  # 设置30秒超时
+                
+                if not response:  # 如果前面的尝试没有成功获取响应
+                    for attempt in range(max_retries):
+                        try:
+                            current_time = time.time()
+                            if current_time - start_time > timeout:
+                                raise TimeoutError("API 调用超时（超过30秒）")
+                            if attempt > 0:
+                                delay = min(base_delay * (2 ** (attempt - 1)), timeout - (current_time - start_time))
+                                if delay <= 0:
+                                    raise TimeoutError("API 调用超时（超过30秒）")
+                                print(f"[Gemini Pro] 等待 {delay:.1f} 秒后重试...")
+                                time.sleep(delay)
+                            
+                            response = model_instance.generate_content(
+                                content,
+                                generation_config=genai.types.GenerationConfig(
+                                    temperature=temperature,
+                                    max_output_tokens=max_output_tokens,
+                                    candidate_count=1
+                                )
+                            )
+                            break  # 如果成功，跳出重试循环
+                        except TimeoutError as te:
+                            print(f"[Gemini Pro] {str(te)}")
+                            return (f"错误: {str(te)}",)
+                        except Exception as e:
+                            if "ResourceExhausted" in str(e) and attempt < max_retries - 1:
+                                print(f"[Gemini Pro] 资源不足，正在重试 ({attempt + 1}/{max_retries})")
+                                continue
+                            raise  # 如果是其他错误或已达到最大重试次数，则抛出异常
 
-            if response.text:
-                print(f"[Gemini Pro] 生成完成，长度: {len(response.text)} 字符")
-                return (response.text,)
-            else:
-                print("[Gemini Pro] 错误: API 返回为空")
-                return ("错误: API 返回为空",)
+                end_time = time.time()
+                print(f"[Gemini Pro] API 调用耗时: {end_time - start_time:.2f} 秒")
+
+                if response and response.text:
+                    print(f"[Gemini Pro] 生成完成，长度: {len(response.text)} 字符")
+                    return (response.text,)
+                else:
+                    print("[Gemini Pro] 错误: API 返回为空")
+                    return ("错误: API 返回为空",)
+            finally:
+                # 确保资源被正确释放
+                # 清理大型对象引用
+                if media_content and hasattr(media_content, 'close'):
+                    try:
+                        media_content.close()
+                    except:
+                        pass
+                
+                # 清理内容列表中的大型对象
+                if content:
+                    for i in range(len(content)):
+                        if isinstance(content[i], PIL.Image.Image):
+                            try:
+                                content[i].close()
+                            except:
+                                pass
+                
+                # 尝试显式地进行一次垃圾收集
+                import gc
+                gc.collect()
+                
+                # 重置会话相关变量
+                model_instance = None
 
         except Exception as e:
             print(f"[Gemini Pro] 错误: {str(e)}")
@@ -481,6 +523,7 @@ class GeminiFileProcessing:
                 "stream": ("BOOLEAN", {"default": False}),
                 "max_output_tokens": ("INT", {"default": 8192, "min": 1, "max": 8192}),
                 "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
+                "proxy": ("STRING", {"default": ""}),
             }
         }
 
@@ -490,7 +533,7 @@ class GeminiFileProcessing:
     OUTPUT_NODE = True
     CATEGORY = "Gemini Pro"
 
-    def generate_content(self, file, prompt, user_prompt, model, stream, max_output_tokens=8192, temperature=0.4):
+    def generate_content(self, file, prompt, user_prompt, model, stream, max_output_tokens=8192, temperature=0.4, proxy=""):
         try:
             if not self.api_key:
                 return ("错误: 未在配置文件中找到有效的 API Key，请先在 config.json 中配置",)
@@ -499,6 +542,26 @@ class GeminiFileProcessing:
             print(f"[Gemini文件处理] 系统提示词: {user_prompt}")
             print(f"[Gemini文件处理] 提示词: {prompt}")
             print(f"[Gemini文件处理] 模型: {model}")
+            
+            # 处理代理设置 - 智能自适应
+            if proxy and proxy.strip():
+                # 格式化代理地址，确保包含协议前缀
+                proxy = proxy.strip()
+                if not (proxy.startswith('http://') or proxy.startswith('https://')):
+                    proxy = f"http://{proxy}"
+                    print(f"[Gemini文件处理] 已自动添加http://前缀到代理地址")
+                
+                # 设置环境变量
+                os.environ['http_proxy'] = proxy
+                os.environ['https_proxy'] = proxy
+                print(f"[Gemini文件处理] 使用代理: {proxy}")
+            else:
+                # 如果未提供代理，确保清除之前可能设置的环境变量
+                if 'http_proxy' in os.environ:
+                    del os.environ['http_proxy']
+                if 'https_proxy' in os.environ:
+                    del os.environ['https_proxy']
+                print("[Gemini文件处理] 不使用代理")
                 
             # 创建模型实例
             model_instance = genai.GenerativeModel(model)
@@ -514,57 +577,92 @@ class GeminiFileProcessing:
             combined_prompt = f"System: {user_prompt}\nUser: {prompt}"
             
             # 发送请求并处理流式/非流式响应
-            for attempt in range(max_retries):
-                try:
-                    if attempt > 0:
-                        delay = base_delay * (2 ** attempt)  # 指数退避
-                        print(f"[Gemini文件处理] 配额限制，等待 {delay} 秒后重试...")
-                        time.sleep(delay)
-                    
-                    start_time = time.time()
-                    
-                    if stream:
-                        print("[Gemini文件处理] 使用流式输出模式")
-                        response = model_instance.generate_content(
-                            [combined_prompt, file], 
-                            stream=True,
-                            generation_config=genai.types.GenerationConfig(
-                                temperature=temperature,
-                                max_output_tokens=max_output_tokens
-                            )
-                        )
-                        textoutput = "\n".join([chunk.text for chunk in response])
-                    else:
-                        print("[Gemini文件处理] 使用标准输出模式")
-                        response = model_instance.generate_content(
-                            [combined_prompt, file],
-                            generation_config=genai.types.GenerationConfig(
-                                temperature=temperature,
-                                max_output_tokens=max_output_tokens
-                            )
-                        )
-                        textoutput = response.text
-                    
-                    end_time = time.time()
-                    print(f"[Gemini文件处理] API 调用耗时: {end_time - start_time:.2f} 秒")
-                    print(f"[Gemini文件处理] 生成完成，长度: {len(textoutput)} 字符")
-                    
-                    return (textoutput,)
-                except Exception as e:
-                    if "ResourceExhausted" in str(e) and attempt < max_retries - 1:
-                        print(f"[Gemini文件处理] 资源不足，正在重试 ({attempt + 1}/{max_retries})")
-                        continue
-                    elif attempt < max_retries - 1:
-                        print(f"[Gemini文件处理] 错误: {str(e)}, 正在重试 ({attempt + 1}/{max_retries})")
-                        continue
-                    raise  # 其他错误或已达到最大重试次数，抛出异常
+            response = None
+            textoutput = ""
             
-            # 如果所有重试都失败
-            return ("错误: API调用失败，已重试最大次数",)
+            try:
+                for attempt in range(max_retries):
+                    try:
+                        if attempt > 0:
+                            delay = base_delay * (2 ** attempt)  # 指数退避
+                            print(f"[Gemini文件处理] 配额限制，等待 {delay} 秒后重试...")
+                            time.sleep(delay)
+                        
+                        start_time = time.time()
+                        
+                        if stream:
+                            print("[Gemini文件处理] 使用流式输出模式")
+                            response = model_instance.generate_content(
+                                [combined_prompt, file], 
+                                stream=True,
+                                generation_config=genai.types.GenerationConfig(
+                                    temperature=temperature,
+                                    max_output_tokens=max_output_tokens
+                                )
+                            )
+                            # 使用列表推导式收集响应，确保迭代完成
+                            chunks = [chunk for chunk in response]
+                            textoutput = "\n".join([chunk.text for chunk in chunks if hasattr(chunk, 'text')])
+                        else:
+                            print("[Gemini文件处理] 使用标准输出模式")
+                            response = model_instance.generate_content(
+                                [combined_prompt, file],
+                                generation_config=genai.types.GenerationConfig(
+                                    temperature=temperature,
+                                    max_output_tokens=max_output_tokens
+                                )
+                            )
+                            if hasattr(response, 'text'):
+                                textoutput = response.text
+                        
+                        # 如果成功获取到文本内容，退出重试循环
+                        if textoutput:
+                            break
+                            
+                    except Exception as e:
+                        error_str = str(e)
+                        if "ResourceExhausted" in error_str and attempt < max_retries - 1:
+                            print(f"[Gemini文件处理] 资源不足，正在重试 ({attempt + 1}/{max_retries})")
+                            continue
+                        elif attempt < max_retries - 1:
+                            print(f"[Gemini文件处理] 错误: {error_str}, 正在重试 ({attempt + 1}/{max_retries})")
+                            continue
+                        raise  # 其他错误或已达到最大重试次数，抛出异常
+                
+                end_time = time.time()
+                print(f"[Gemini文件处理] API 调用耗时: {end_time - start_time:.2f} 秒")
+                
+                if textoutput:
+                    print(f"[Gemini文件处理] 生成完成，长度: {len(textoutput)} 字符")
+                    return (textoutput,)
+                else:
+                    print("[Gemini文件处理] 警告: 未获取到有效输出")
+                    return ("API未返回有效输出。请检查文件格式和提示词，然后重试。",)
+            
+            finally:
+                # 确保资源被正确释放
+                # 清理模型实例
+                model_instance = None
+                
+                # 清理文件引用
+                file = None
+                
+                # 清理响应对象
+                response = None
+                
+                # 显式进行垃圾回收
+                import gc
+                gc.collect()
+                
+                print("[Gemini文件处理] 资源清理完成")
             
         except Exception as e:
             error_msg = str(e)
             print(f"[Gemini文件处理] 错误: {error_msg}")
+            
+            # 显式进行垃圾回收
+            import gc
+            gc.collect()
             
             # 如果出现文件状态错误，给用户更清晰的提示
             if "not in an ACTIVE state" in error_msg:
