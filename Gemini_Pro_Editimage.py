@@ -20,7 +20,7 @@ class GeminiProEditimage:
             "required": {
                 "prompt": ("STRING", {"multiline": True}),
                 "api_key": ("STRING", {"default": "", "multiline": False}),
-                "model": (["models/gemini-2.0-flash-exp"], {"default": "models/gemini-2.0-flash-exp"}),
+                "model": (["models/gemini-2.0-flash-exp“,”models/gemini-2.5-flash-preview-05-20"], {"default": "models/gemini-2.5-flash-preview-05-20"}),
                 "temperature": ("FLOAT", {"default": 1, "min": 0.0, "max": 2.0, "step": 0.05}),
             },
             "optional": {

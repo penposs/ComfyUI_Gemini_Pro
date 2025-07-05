@@ -47,7 +47,7 @@ class GeminiProNode:
                 "prompt": ("STRING", {"default": "Analyze the situation in details.", "multiline": True}),
                 "system_prompt": ("STRING", {"default": "You are a helpful AI assistant.", "multiline": True}),
                 "input_type": (["text", "image", "video", "audio"], {"default": "text"}),
-                "model": (["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"], {"default": "gemini-1.5-flash"}),
+                "model": (["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp","gemini-2.5-flash-preview-04-17","gemini-2.5-flash-preview-05-20"], {"default": "gemini-2.5-flash-preview-04-17"}),
                 "api_key": ("STRING", {"default": ""}),
                 "proxy": ("STRING", {"default": ""}),
                 "delay_time": (["0", "1", "2", "3", "5", "10"], {"default": "0"}),
@@ -56,7 +56,7 @@ class GeminiProNode:
                 "image": ("IMAGE",),
                 "video": ("VIDEO",),
                 "audio": ("AUDIO",),
-                "max_output_tokens": ("INT", {"default": 1000, "min": 1, "max": 8192}),
+                "max_output_tokens": ("INT", {"default": 6000, "min": 1, "max": 65536}),
                 "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
             }
         }
@@ -448,9 +448,9 @@ class GeminiFileProcessing:
                 "file": ("GEMINI_FILE",),
                 "prompt": ("STRING", {"default": "分析这个文件内容并提供摘要。", "multiline": True}),
                 "user_prompt": ("STRING", {"default": "你是一个专业的文件分析助手，请以专业、清晰的方式分析文件内容。", "multiline": True}),
-                "model": (["gemini-1.5-pro", "gemini-2.0-pro-exp", "gemini-2.0-flash-exp"], {"default": "gemini-1.5-pro"}),
+                "model": (["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp","gemini-2.5-flash-preview-04-17","gemini-2.5-flash-preview-05-20"], {"default": "gemini-2.5-flash-preview-04-17"}),
                 "stream": ("BOOLEAN", {"default": False}),
-                "max_output_tokens": ("INT", {"default": 8192, "min": 1, "max": 8192}),
+                "max_output_tokens": ("INT", {"default": 65536, "min": 1, "max": 65536}),
                 "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
                 "proxy": ("STRING", {"default": ""}),
             }
@@ -462,7 +462,7 @@ class GeminiFileProcessing:
     OUTPUT_NODE = True
     CATEGORY = "Gemini Pro"
 
-    def generate_content(self, file, prompt, user_prompt, model, stream, max_output_tokens=8192, temperature=0.4, proxy=""):
+    def generate_content(self, file, prompt, user_prompt, model, stream, max_output_tokens=65536, temperature=0.4, proxy=""):
         try:
             if not self.api_key:
                 return ("错误: 未在配置文件中找到有效的 API Key，请先在 config.json 中配置",)

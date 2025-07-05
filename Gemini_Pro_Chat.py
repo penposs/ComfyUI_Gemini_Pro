@@ -22,7 +22,7 @@ class GeminiProChat:
             "required": {
                 "prompt": ("STRING", {"multiline": True}),
                 "api_key": ("STRING", {"default": "", "multiline": False}),
-                "model": (["models/gemini-2.0-flash-exp"], {"default": "models/gemini-2.0-flash-exp"}),
+                "model": (["models/gemini-2.0-flash-exp","models/gemini-2.5-flash-preview-05-20"], {"default": "models/gemini-2.0-flash-exp"}),
                 "temperature": ("FLOAT", {"default": 0.7, "min": 0.0, "max": 1.5, "step": 0.05}),
                 "width": ("INT", {"default": 1024, "min": 512, "max": 2048, "step": 8}),
                 "height": ("INT", {"default": 1024, "min": 512, "max": 2048, "step": 8}),
