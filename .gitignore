@@ -22,6 +22,7 @@ var/
 
 # 配置文件
 config.json
+Gemini_Pro_Node.zip
 
 # IDE
 .idea/
