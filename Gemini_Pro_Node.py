@@ -47,7 +47,7 @@ class GeminiProNode:
                 "prompt": ("STRING", {"default": "Analyze the situation in details.", "multiline": True}),
                 "system_prompt": ("STRING", {"default": "You are a helpful AI assistant.", "multiline": True}),
                 "input_type": (["text", "image", "video", "audio"], {"default": "text"}),
-                "model": (["gemini-2.5-pro-exp-03-25","gemini-2.5-flash-preview-05-20"], {"default": "gemini-2.5-flash-preview-05-20"}),
+                "model": (["gemini-3-pro-preview","gemini-2.5-flash-preview-09-2025","gemini-2.5-flash-preview-05-20"], {"default": "gemini-2.5-flash-preview-09-2025"}),
                 "api_key": ("STRING", {"default": ""}),
                 "proxy": ("STRING", {"default": ""}),
                 "delay_time": (["0", "1", "2", "3", "5", "10"], {"default": "0"}),
@@ -316,12 +316,49 @@ class GeminiProNode:
                 end_time = time.time()
                 print(f"[Gemini Pro] API 调用耗时: {end_time - start_time:.2f} 秒")
 
-                if response and response.text:
-                    print(f"[Gemini Pro] 生成完成，长度: {len(response.text)} 字符")
-                    return (response.text,)
+                # 安全获取响应文本，避免直接访问 response.text 导致异常
+                safe_text = ""
+                try:
+                    text_candidate = getattr(response, "text", None)
+                    if text_candidate:
+                        safe_text = text_candidate
+                except Exception as e:
+                    print(f"[Gemini Pro] 注意: 直接访问 response.text 失败: {e}")
+                # 从 candidates 中兜底提取
+                if not safe_text and hasattr(response, "candidates"):
+                    try:
+                        parts_texts = []
+                        for cand in (getattr(response, "candidates", []) or []):
+                            fr = getattr(cand, "finish_reason", None)
+                            if fr is not None:
+                                print(f"[Gemini Pro] 候选 finish_reason: {fr}")
+                            content_obj = getattr(cand, "content", None)
+                            if content_obj is not None:
+                                parts = getattr(content_obj, "parts", None)
+                                if parts:
+                                    for p in parts:
+                                        t = getattr(p, "text", None)
+                                        if t:
+                                            parts_texts.append(t)
+                        if parts_texts:
+                            safe_text = "\n".join(parts_texts)
+                    except Exception as e:
+                        print(f"[Gemini Pro] 从 candidates 提取文本失败: {e}")
+
+                if safe_text:
+                    print(f"[Gemini Pro] 生成完成，长度: {len(safe_text)} 字符")
+                    return (safe_text,)
                 else:
-                    print("[Gemini Pro] 错误: API 返回为空")
-                    return ("错误: API 返回为空",)
+                    # 输出更多诊断信息（例如安全拦截原因）
+                    try:
+                        pf = getattr(response, "prompt_feedback", None)
+                        block_reason = getattr(pf, "block_reason", None) if pf is not None else None
+                        if block_reason:
+                            print(f"[Gemini Pro] 警告: 输出被安全策略拦截，block_reason={block_reason}")
+                    except Exception:
+                        pass
+                    print("[Gemini Pro] 错误: API 返回为空或被安全策略拦截")
+                    return ("错误: API 未返回有效输出，可能被安全策略拦截或输入无效。",)
             finally:
                 # 确保资源被正确释放
                 # 清理大型对象引用
@@ -499,7 +536,7 @@ class GeminiFileProcessing:
                 "file": ("GEMINI_FILE",),
                 "prompt": ("STRING", {"default": "分析这个文件内容并提供摘要。", "multiline": True}),
                 "user_prompt": ("STRING", {"default": "你是一个专业的文件分析助手，请以专业、清晰的方式分析文件内容。", "multiline": True}),
-                "model": (["gemini-2.5-pro-exp-03-25”,", "gemini-2.0-flash-exp","gemini-2.5-flash-preview-05-20"], {"default": "gemini-2.5-flash-preview-05-20"}),
+                "model": (["gemini-2.5-flash-preview-09-2025","gemini-3-pro-preview", "gemini-2.0-flash-exp","gemini-2.5-flash-preview-05-20"], {"default": "gemini-2.5-flash-preview-09-2025"}),
                 "stream": ("BOOLEAN", {"default": False}),
                 "max_output_tokens": ("INT", {"default": 65536, "min": 1, "max": 65536}),
                 "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
@@ -592,8 +629,31 @@ class GeminiFileProcessing:
                                     max_output_tokens=max_output_tokens
                                 )
                             )
-                            if hasattr(response, 'text'):
-                                textoutput = response.text
+                            try:
+                                text_candidate = getattr(response, "text", None)
+                                if text_candidate:
+                                    textoutput = text_candidate
+                            except Exception as e:
+                                print(f"[Gemini文件处理] 注意: 直接访问 response.text 失败: {e}")
+                                try:
+                                    candidates = getattr(response, "candidates", []) or []
+                                    texts = []
+                                    for cand in candidates:
+                                        fr = getattr(cand, "finish_reason", None)
+                                        if fr is not None:
+                                            print(f"[Gemini文件处理] 候选 finish_reason: {fr}")
+                                        content_obj = getattr(cand, "content", None)
+                                        if content_obj is not None:
+                                            parts = getattr(content_obj, "parts", None)
+                                            if parts:
+                                                for p in parts:
+                                                    t = getattr(p, "text", None)
+                                                    if t:
+                                                        texts.append(t)
+                                    if texts:
+                                        textoutput = "\n".join(texts)
+                                except Exception as e2:
+                                    print(f"[Gemini文件处理] 从 candidates 提取失败: {e2}")
                         
                         # 如果成功获取到文本内容，退出重试循环
                         if textoutput:
@@ -616,6 +676,13 @@ class GeminiFileProcessing:
                     print(f"[Gemini文件处理] 生成完成，长度: {len(textoutput)} 字符")
                     return (textoutput,)
                 else:
+                    try:
+                        pf = getattr(response, "prompt_feedback", None)
+                        block_reason = getattr(pf, "block_reason", None) if pf is not None else None
+                        if block_reason:
+                            print(f"[Gemini文件处理] 警告: 输出被安全策略拦截，block_reason={block_reason}")
+                    except Exception:
+                        pass
                     print("[Gemini文件处理] 警告: 未获取到有效输出")
                     return ("API未返回有效输出。请检查文件格式和提示词，然后重试。",)
             
