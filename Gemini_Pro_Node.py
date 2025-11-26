@@ -39,6 +39,19 @@ class GeminiProNode:
             print("[Gemini Pro] 成功保存 API Key 到配置文件")
         except Exception as e:
             print(f"[Gemini Pro] 保存配置文件失败: {str(e)}")
+    
+    def add_random_variation(self, prompt, seed=0):
+        """
+        在提示词末尾添加隐藏的随机标识
+        确保每次运行都能得到不同结果
+        """
+        if seed == 0:
+            random_id = random.randint(10000, 99999)
+        else:
+            rng = random.Random(seed)
+            random_id = rng.randint(10000, 99999)
+        
+        return f"{prompt} [variation-{random_id}]"
         
     @classmethod
     def INPUT_TYPES(cls):
@@ -51,6 +64,12 @@ class GeminiProNode:
                 "api_key": ("STRING", {"default": ""}),
                 "proxy": ("STRING", {"default": ""}),
                 "delay_time": (["0", "1", "2", "3", "5", "10"], {"default": "0"}),
+                "seed": ("INT", {
+                    "default": 0,
+                    "min": 0,
+                    "max": 0xffffffffffffffff,
+                    "tooltip": "随机种子，改变此值会强制重新生成内容"
+                }),
             },
             "optional": {
                 "image1": ("IMAGE",),
@@ -59,8 +78,8 @@ class GeminiProNode:
                 "image4": ("IMAGE",),
                 "video": ("VIDEO",),
                 "audio": ("AUDIO",),
-                "max_output_tokens": ("INT", {"default": 6000, "min": 1, "max": 65536}),
-                "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
+                "max_output_tokens": ("INT", {"default": 15360, "min": 1, "max": 65536}),
+                "temperature": ("FLOAT", {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.1}),
             }
         }
 
@@ -69,8 +88,8 @@ class GeminiProNode:
     CATEGORY = "Gemini Pro"
 
     def generate(self, prompt, system_prompt, input_type, model, api_key, proxy, 
-                delay_time="0", image1=None, image2=None, image3=None, image4=None, video=None, audio=None, 
-                max_output_tokens=1000, temperature=0.4):
+                delay_time="0", seed=0, image1=None, image2=None, image3=None, image4=None, video=None, audio=None, 
+                max_output_tokens=1000, temperature=0.6):
         try:
             # 在 API 调用前添加强制延迟
             delay_seconds = int(delay_time)
@@ -112,11 +131,15 @@ class GeminiProNode:
             print(f"[Gemini Pro] 输入类型: {input_type}")
             print(f"[Gemini Pro] 系统引导词: {system_prompt}")
             print(f"[Gemini Pro] 提示词: {prompt}")
+            print(f"[Gemini Pro] 随机种子: {seed}")
             
             start_time = time.time()
 
+            # 添加随机变化因子到提示词
+            varied_prompt = self.add_random_variation(prompt, seed)
+
             # 准备输入内容
-            content = [prompt] if prompt else []
+            content = [varied_prompt] if varied_prompt else []
             
             # 根据输入类型处理
             media_content = None
@@ -179,7 +202,7 @@ class GeminiProNode:
                     # 如果有媒体内容，将其与提示词组合
                     if converted_images:
                         media_contents.extend(converted_images)
-                        content = [prompt] + media_contents if prompt else media_contents
+                        content = [varied_prompt] + media_contents if varied_prompt else media_contents
                         
                 except Exception as e:
                     print(f"[Gemini Pro] 图片处理错误: {str(e)}")
@@ -196,7 +219,7 @@ class GeminiProNode:
                             return uploaded_file
                             
                         # 构建视频分析提示
-                        video_prompt = f"这是一个视频文件。请分析视频内容，注意视频中的动作、场景变化和关键事件：\n{prompt}"
+                        video_prompt = f"这是一个视频文件。请分析视频内容，注意视频中的动作、场景变化和关键事件：\n{varied_prompt}"
                         content = [video_prompt, uploaded_file[0]]
                         
                     else:
@@ -208,7 +231,7 @@ class GeminiProNode:
                     return (f"错误: 视频处理失败 - {str(e)}",)
             elif input_type == "audio" and audio is not None:
                 media_content = audio
-                content = [prompt, media_content] if prompt else [media_content]
+                content = [varied_prompt, media_content] if varied_prompt else [media_content]
             else:
                 return (f"错误: {input_type} 类型需要提供对应的输入",)
 
@@ -539,7 +562,7 @@ class GeminiFileProcessing:
                 "model": (["gemini-2.5-flash-preview-09-2025","gemini-3-pro-preview", "gemini-2.0-flash-exp","gemini-2.5-flash-preview-05-20"], {"default": "gemini-2.5-flash-preview-09-2025"}),
                 "stream": ("BOOLEAN", {"default": False}),
                 "max_output_tokens": ("INT", {"default": 65536, "min": 1, "max": 65536}),
-                "temperature": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.1}),
+                "temperature": ("FLOAT", {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.1}),
                 "proxy": ("STRING", {"default": ""}),
             }
         }
@@ -550,7 +573,7 @@ class GeminiFileProcessing:
     OUTPUT_NODE = True
     CATEGORY = "Gemini Pro"
 
-    def generate_content(self, file, prompt, user_prompt, model, stream, max_output_tokens=65536, temperature=0.4, proxy=""):
+    def generate_content(self, file, prompt, user_prompt, model, stream, max_output_tokens=65536, temperature=0.6, proxy=""):
         try:
             if not self.api_key:
                 return ("错误: 未在配置文件中找到有效的 API Key，请先在 config.json 中配置",)
