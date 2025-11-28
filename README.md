@@ -2,13 +2,10 @@
 
 这是一个用于 ComfyUI 的 Google Gemini Pro API 全功能集合节点支持文本、图像、视频和音频输入。
 
-支持最新的图像生成和编辑能力\剧本生成
-![dee31ff12e6960cb7b7f6f262cc71ca](https://github.com/user-attachments/assets/d242dd82-f525-410a-8b9a-ebc76e41ba71)
+支持多图输入
 
-![6e379a92710d818f4a9d3be9d6dab17](https://github.com/user-attachments/assets/88195a23-2235-4356-9548-eefea76f779c)
+<img width="516" height="605" alt="局部截取_20251128_222549" src="https://github.com/user-attachments/assets/7ca73923-f764-4d5f-a87c-550659dc746b" />
 
-![6f43e715a7814333f021d5839e35420](https://github.com/user-attachments/assets/65be0222-1357-4f8d-8b40-644bb2952589)
-![bbcebd0c20b384578da722b3b28f1ee](https://github.com/user-attachments/assets/5ceb700d-871e-498e-ab27-ddccb480bcb4)
 
 
 
